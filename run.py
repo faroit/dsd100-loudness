@@ -69,8 +69,9 @@ def compute_mur_va_ranking(track, framesize=1024, exerpt_window=10.0):
         / track_loudness_lin_voc
 
     track_mur = essentia.array(np.array(track_mur))
-    exerpt_frame = int(np.ceil(10.0 / (framesize / float(track.rate))))
+    exerpt_frame = int(np.ceil(10.0 * 2 / (framesize / float(track.rate))))
 
+    exerpt_hop = 10
     df = pd.DataFrame(columns=(
         'track_name',
         'loudness',
@@ -83,14 +84,14 @@ def compute_mur_va_ranking(track, framesize=1024, exerpt_window=10.0):
         track_mur,
         startFromZero=True,
         frameSize=exerpt_frame,
-        hopSize=exerpt_frame
+        hopSize=exerpt_hop
     )):
         s = pd.Series(
             {
                 'track_name': track.name,
                 'loudness': scipy.stats.mstats.gmean(np.maximum(frame, np.finfo(float).eps)),
-                'start_time': i * framesize / float(track.rate),
-                'stop_time': (i + exerpt_frame) * framesize / float(track.rate),
+                'start_time': (i * exerpt_hop) * framesize / float(track.rate) / 2,
+                'stop_time': ((i * exerpt_hop) + exerpt_frame) * framesize / float(track.rate) / 2,
             }
         )
         df = df.append(s, ignore_index=True)
