@@ -1,3 +1,5 @@
 essentia
 numpy
+pandas
+seaborn
 dsd100
