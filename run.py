@@ -3,11 +3,28 @@ import dsd100
 import argparse
 import essentia.standard
 import numpy as np
-import scipy.stats.mstats
+from scipy.stats.mstats import gmean
 import pandas as pd
 
 
-def compute_mur_va_ranking(track, framesize=1024, exerpt_window=10.0):
+def loundness(ndarray, win, hop):
+    ess_array = essentia.array(ndarray)
+    track_loudness = []
+    loudness = essentia.standard.LoudnessVickers()
+    w = essentia.standard.Windowing(type='hann')
+
+    for frame in essentia.standard.FrameGenerator(
+        ess_array,
+        startFromZero=True,
+        frameSize=win,
+        hopSize=hop
+    ):
+        track_loudness.append(10.**(loudness(w(frame)) / 20.))
+
+    return np.array(track_loudness)
+
+
+def compute_mur_va_ranking(track, win=1024, overlap=0.5, exerpt_window=10.0):
     """Computes the masked to unmasked loudness ratio over a sliding excerpt window
        for vocal accompaniment, only. Thus maximising the vocals transparency
 
@@ -21,55 +38,22 @@ def compute_mur_va_ranking(track, framesize=1024, exerpt_window=10.0):
         raise ValueError("Samplerate not supported by Loudness algorithm")
 
     # compute framewise loudness
-    audio_mix = essentia.array(
-        track.audio.sum(axis=1)
-    )
-    audio_voc = essentia.array(
-        track.targets['vocals'].audio.sum(axis=1)
-    )
-    audio_acc = essentia.array(
-        track.targets['accompaniment'].audio.sum(axis=1)
-    )
+    audio_mix = track.audio.sum(axis=1)
+    audio_voc = track.targets['vocals'].audio.sum(axis=1)
+    audio_acc = track.targets['accompaniment'].audio.sum(axis=1)
 
-    loudness = essentia.standard.LoudnessVickers()
-    w = essentia.standard.Windowing(type='hann')
-    track_loudness_mix = []
-    track_loudness_voc = []
-    track_loudness_acc = []
-
-    for frame in essentia.standard.FrameGenerator(
-        audio_mix,
-        startFromZero=True,
-        frameSize=framesize,
-        hopSize=512
-    ):
-        track_loudness_mix.append(10.**(loudness(w(frame)) / 20.))
-
-    for frame in essentia.standard.FrameGenerator(
-        audio_voc,
-        startFromZero=True,
-        frameSize=framesize,
-        hopSize=512
-    ):
-        track_loudness_voc.append(10.**(loudness(w(frame)) / 20.))
-
-    for frame in essentia.standard.FrameGenerator(
-        audio_acc,
-        startFromZero=True,
-        frameSize=framesize,
-        hopSize=512
-    ):
-        track_loudness_acc.append(10.**(loudness(w(frame)) / 20.))
-
-    track_loudness_lin_mix = np.array(track_loudness_mix)
-    track_loudness_lin_acc = np.array(track_loudness_acc)
-    track_loudness_lin_voc = np.array(track_loudness_voc)
+    track_loudness_lin_mix = loundness(audio_mix, win, hop=int(win*overlap))
+    track_loudness_lin_acc = loundness(audio_acc, win, hop=int(win*overlap))
+    track_loudness_lin_voc = loundness(audio_voc, win, hop=int(win*overlap))
 
     track_mur = (track_loudness_lin_mix - track_loudness_lin_acc) \
         / track_loudness_lin_voc
 
     track_mur = essentia.array(np.array(track_mur))
-    exerpt_frame = int(np.ceil(10.0 * 2 / (framesize / float(track.rate))))
+
+    exerpt_frame = np.ceil(
+        exerpt_window * int(1 / overlap) / (win / float(track.rate))
+    )
 
     exerpt_hop = 10
     df = pd.DataFrame(columns=(
@@ -89,9 +73,9 @@ def compute_mur_va_ranking(track, framesize=1024, exerpt_window=10.0):
         s = pd.Series(
             {
                 'track_name': track.name,
-                'loudness': scipy.stats.mstats.gmean(np.maximum(frame, np.finfo(float).eps)),
-                'start_time': (i * exerpt_hop) * framesize / float(track.rate) / 2,
-                'stop_time': ((i * exerpt_hop) + exerpt_frame) * framesize / float(track.rate) / 2,
+                'loudness': gmean(np.maximum(frame, np.finfo(float).eps)),
+                'start_time': (i * exerpt_hop) * win / float(track.rate) / 2,
+                'stop_time': ((i * exerpt_hop) + exerpt_frame) * win / float(track.rate) / 2,
             }
         )
         df = df.append(s, ignore_index=True)
