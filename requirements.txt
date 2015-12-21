@@ -1,5 +1,6 @@
 essentia
 numpy
+scipy
 pandas
 seaborn
 dsd100

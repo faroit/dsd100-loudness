@@ -7,7 +7,7 @@ from scipy.stats.mstats import gmean
 import pandas as pd
 
 
-def loundness(ndarray, win, hop):
+def loundness_vickers(ndarray, win, hop):
     ess_array = essentia.array(ndarray)
     track_loudness = []
     loudness = essentia.standard.LoudnessVickers()
@@ -25,12 +25,10 @@ def loundness(ndarray, win, hop):
 
 
 def compute_mur_va_ranking(track, win=1024, overlap=0.5, exerpt_window=10.0):
-    """Computes the masked to unmasked loudness ratio over a sliding excerpt window
+    """Computes the masked loudness estimated over a sliding excerpt window
        for vocal accompaniment, only. Thus maximising the vocals transparency
 
-                        max(loudness_mix - loudness_accompaniment, 0.003)
-      MUR_vocal = -------------------------------------------------------------
-                                    max(loudness_voc, 0.003)
+    ml_vocal = max(loudness_mix - loudness_accompaniment, eps)
 
     References: https://www.spsc.tugraz.at/biblio/aichinger2011aichinger2011
     """
@@ -39,17 +37,18 @@ def compute_mur_va_ranking(track, win=1024, overlap=0.5, exerpt_window=10.0):
 
     # compute framewise loudness
     audio_mix = track.audio.sum(axis=1)
-    audio_voc = track.targets['vocals'].audio.sum(axis=1)
     audio_acc = track.targets['accompaniment'].audio.sum(axis=1)
 
-    track_loudness_lin_mix = loundness(audio_mix, win, hop=int(win*overlap))
-    track_loudness_lin_acc = loundness(audio_acc, win, hop=int(win*overlap))
-    track_loudness_lin_voc = loundness(audio_voc, win, hop=int(win*overlap))
+    track_loudness_mix = loundness_vickers(
+        audio_mix, win, hop=int(win*overlap)
+    )
+    track_loudness_acc = loundness_vickers(
+        audio_acc, win, hop=int(win*overlap)
+    )
 
-    track_mur = (track_loudness_lin_mix - track_loudness_lin_acc) \
-        / track_loudness_lin_voc
+    ml_vocal = (track_loudness_mix - track_loudness_acc)
 
-    track_mur = essentia.array(np.array(track_mur))
+    ml_vocal = essentia.array(np.array(ml_vocal))
 
     exerpt_frame = np.ceil(
         exerpt_window * int(1 / overlap) / (win / float(track.rate))
@@ -65,7 +64,7 @@ def compute_mur_va_ranking(track, win=1024, overlap=0.5, exerpt_window=10.0):
     )
 
     for i, frame in enumerate(essentia.standard.FrameGenerator(
-        track_mur,
+        ml_vocal,
         startFromZero=True,
         frameSize=exerpt_frame,
         hopSize=exerpt_hop
@@ -74,8 +73,8 @@ def compute_mur_va_ranking(track, win=1024, overlap=0.5, exerpt_window=10.0):
             {
                 'track_name': track.name,
                 'loudness': gmean(np.maximum(frame, np.finfo(float).eps)),
-                'start_time': (i * exerpt_hop) * win / float(track.rate) / 2,
-                'stop_time': ((i * exerpt_hop) + exerpt_frame) * win / float(track.rate) / 2,
+                'start_time': (i * exerpt_hop * win) / float(track.rate) / int(1 / overlap),
+                'stop_time': ((i * exerpt_hop) + exerpt_frame) * win / float(track.rate) / int(1 / overlap),
             }
         )
         df = df.append(s, ignore_index=True)
