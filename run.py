@@ -84,7 +84,7 @@ def compute_mur_va_ranking(track, win=1024, overlap=0.5, exerpt_window=10.0):
 def get_high_va_track(dsd):
     df = pd.DataFrame(columns=(
         'track_name',
-        'loudness',
+        'cross_loudness',
         'start_time',
         'stop_time'
         )
@@ -93,10 +93,15 @@ def get_high_va_track(dsd):
     for i, track in enumerate(dsd.iter_dsd_tracks()):
         print track.name
         df_l = compute_mur_va_ranking(track)
-        print df_l.ix[df_l['loudness'].idxmax()]
-        df.append(df_l, ignore_index=True)
+        df = df.append(df_l, ignore_index=True)
     return df
 
+
+def get_top_n_exerpts(df, n=1):
+    grouped = df.groupby(['track_name'])
+    return grouped.apply(
+        lambda g: g.sort_index(by='cross_loudness', ascending=False).head(n)
+    )
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -113,4 +118,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     dsd = dsd100.DB()
-    get_high_va_track(dsd)
+    df = get_high_va_track(dsd)
+    df.to_pickle("results.pandas")
+    df_top1 = get_top_n_exerpts(df)
+    df_top1.to_csv("top1.csv", sep='\t', encoding='utf-8')
