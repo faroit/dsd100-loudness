@@ -50,11 +50,11 @@ def compute_mur_va_ranking(track, win=1024, overlap=0.5, exerpt_window=10.0):
 
     ml_vocal = essentia.array(np.array(ml_vocal))
 
-    exerpt_frame = np.ceil(
+    exerpt_frame = int(np.ceil(
         exerpt_window * int(1 / overlap) / (win / float(track.rate))
-    )
+    ))
 
-    exerpt_hop = 10
+    exerpt_hop = int(10)
     df = pd.DataFrame(columns=(
         'track_name',
         'loudness',
