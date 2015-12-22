@@ -72,7 +72,7 @@ def compute_mur_va_ranking(track, win=1024, overlap=0.5, exerpt_window=10.0):
         s = pd.Series(
             {
                 'track_name': track.name,
-                'loudness': gmean(np.maximum(frame, np.finfo(float).eps)),
+                'cross_loudness': gmean(np.maximum(frame, np.finfo(float).eps)),
                 'start_time': (i * exerpt_hop * win) / float(track.rate) / int(1 / overlap),
                 'stop_time': ((i * exerpt_hop) + exerpt_frame) * win / float(track.rate) / int(1 / overlap),
             }
@@ -99,9 +99,7 @@ def get_high_va_track(dsd):
 
 def get_top_n_exerpts(df, n=1):
     grouped = df.groupby(['track_name'])
-    return grouped.apply(
-        lambda g: g.sort_index(by='cross_loudness', ascending=False).head(n)
-    )
+    grouped.apply(lambda g: g.sort_index(by='cross_loudness', ascending=False).head(n))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
